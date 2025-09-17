@@ -1,40 +1,48 @@
 #  Exponential Smoothing 
 
-import os
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-# 1. Load data 
-base_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
-train_file = os.path.join(base_dir, "assignment_data_train.csv")
-test_file = os.path.join(base_dir, "assignment_data_test.csv")
+# 1) Load data 
+TRAIN_FILE = "assignment_data_train.csv"
+TEST_FILE  = "assignment_data_test.csv"
 
-if os.path.exists(train_file) and os.path.exists(test_file):
-    train_df = pd.read_csv(train_file)
-    test_df = pd.read_csv(test_file)
-else:
-    raise FileNotFoundError(f"Cannot find CSV files at {train_file} and {test_file}")
+def _read_csv(path: str) -> pd.DataFrame:
+    return pd.read_csv(path, parse_dates=["Timestamp"])
 
-# 2. Prepare data
-train_df = train_df.sort_values("Timestamp").set_index("Timestamp")
-test_df = test_df.sort_values("Timestamp").set_index("Timestamp")
+train_df = _read_csv(TRAIN_FILE).sort_values("Timestamp").set_index("Timestamp")
+test_df  = _read_csv(TEST_FILE).sort_values("Timestamp").set_index("Timestamp")
 
-train_y = train_df["SystemLoadEA"].astype(float).values
-test_y = test_df["SystemLoadEA"].astype(float).values
+# 2) Prepare target (hourly, numeric, no gaps)
+target_col = "SystemLoadEA"
 
-# 3. Train model
-model = ExponentialSmoothing(train_y, trend="add", seasonal="add", seasonal_periods=24)
-modelFit = model.fit()
+# coerce to numeric, set hourly freq, fill gaps by time interpolation
+train_y = (
+    pd.to_numeric(train_df[target_col], errors="coerce")
+      .asfreq("h")
+      .interpolate(method="time", limit_direction="both")
+      .values
+)
 
-# 4. Forecast
-pred = np.asarray(modelFit.forecast(len(test_y)))  # must be numpy array
+# Forecast horizon = length of test set
+h = len(test_df)
 
-# 5. Debug info (will not break autograder)
-print("Train shape:", train_df.shape)
-print("Test shape:", test_df.shape)
-print("Prediction length:", len(pred))
-print("First 5 predictions:", pred[:5])
+# 3) Build & fit model
+model = ExponentialSmoothing(
+    train_y,
+    trend="add",
+    seasonal="add",
+    seasonal_periods=24,
+    initialization_method="estimated",
+)
+modelFit = model.fit(optimized=True, use_brute=True)
+
+# 4) Forecast
+forecast = modelFit.forecast(steps=h)
+pred = np.asarray(forecast, dtype=float).ravel()
+pred = np.maximum(pred, 0.0)  # ensure non-negative
 
 
 
