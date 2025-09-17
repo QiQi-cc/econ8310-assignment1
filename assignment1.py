@@ -1,48 +1,46 @@
 #  Exponential Smoothing 
 
-
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-# 1) Load data 
-TRAIN_FILE = "assignment_data_train.csv"
-TEST_FILE  = "assignment_data_test.csv"
+#  1) Load
+train_df = pd.read_csv("assignment_data_train.csv")
+test_df  = pd.read_csv("assignment_data_test.csv")
 
-def _read_csv(path: str) -> pd.DataFrame:
-    return pd.read_csv(path, parse_dates=["Timestamp"])
+# 2) Prepare data 
+train_df["Timestamp"] = pd.to_datetime(train_df["Timestamp"], errors="coerce")
+test_df["Timestamp"]  = pd.to_datetime(test_df["Timestamp"], errors="coerce")
 
-train_df = _read_csv(TRAIN_FILE).sort_values("Timestamp").set_index("Timestamp")
-test_df  = _read_csv(TEST_FILE).sort_values("Timestamp").set_index("Timestamp")
+train_df = train_df.sort_values("Timestamp").set_index("Timestamp").asfreq("h")
+test_df  = test_df.sort_values("Timestamp").set_index("Timestamp").asfreq("h")
 
-# 2) Prepare target (hourly, numeric, no gaps)
-target_col = "SystemLoadEA"
+train_y = pd.to_numeric(train_df["trips"], errors="coerce")
+train_y = train_y.interpolate(method="time").ffill().bfill()
 
-# coerce to numeric, set hourly freq, fill gaps by time interpolation
-train_y = (
-    pd.to_numeric(train_df[target_col], errors="coerce")
-      .asfreq("h")
-      .interpolate(method="time", limit_direction="both")
-      .values
-)
-
-# Forecast horizon = length of test set
-h = len(test_df)
-
-# 3) Build & fit model
+# 3) Train model 
 model = ExponentialSmoothing(
     train_y,
     trend="add",
     seasonal="add",
     seasonal_periods=24,
-    initialization_method="estimated",
+    initialization_method="estimated"
 )
 modelFit = model.fit(optimized=True, use_brute=True)
 
 # 4) Forecast
+h = len(test_df)
 forecast = modelFit.forecast(steps=h)
-pred = np.asarray(forecast, dtype=float).ravel()
-pred = np.maximum(pred, 0.0)  # ensure non-negative
+
+
+pred = np.maximum(np.asarray(forecast, dtype=float).ravel(), 0.0)
+
+#  Debug 
+print("Train shape:", train_df.shape, "Test shape:", test_df.shape)
+print("Prediction length:", len(pred))
+print("First 5 predictions:", pred[:5])
+
+
 
 
 
