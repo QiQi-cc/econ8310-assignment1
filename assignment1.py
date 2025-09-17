@@ -6,23 +6,20 @@ import numpy as np
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 # 1. Load data 
-train_file = "assignment_data_train.csv"
-test_file = "assignment_data_test.csv"
+base_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+train_file = os.path.join(base_dir, "assignment_data_train.csv")
+test_file = os.path.join(base_dir, "assignment_data_test.csv")
 
 if os.path.exists(train_file) and os.path.exists(test_file):
     train_df = pd.read_csv(train_file)
     test_df = pd.read_csv(test_file)
-elif os.path.exists("../" + train_file) and os.path.exists("../" + test_file):
-    train_df = pd.read_csv("../" + train_file)
-    test_df = pd.read_csv("../" + test_file)
 else:
-    raise FileNotFoundError("Cannot find training/testing CSV files in current or parent directory.")
+    raise FileNotFoundError(f"Cannot find CSV files at {train_file} and {test_file}")
 
 # 2. Prepare data
 train_df = train_df.sort_values("Timestamp").set_index("Timestamp")
 test_df = test_df.sort_values("Timestamp").set_index("Timestamp")
 
-# Ensure numeric values
 train_y = train_df["SystemLoadEA"].astype(float).values
 test_y = test_df["SystemLoadEA"].astype(float).values
 
@@ -31,13 +28,15 @@ model = ExponentialSmoothing(train_y, trend="add", seasonal="add", seasonal_peri
 modelFit = model.fit()
 
 # 4. Forecast
-pred = modelFit.forecast(len(test_y))
+pred = np.asarray(modelFit.forecast(len(test_y)))  # must be numpy array
 
-# 5. Debug info
+# 5. Debug info (will not break autograder)
 print("Train shape:", train_df.shape)
 print("Test shape:", test_df.shape)
 print("Prediction length:", len(pred))
 print("First 5 predictions:", pred[:5])
+
+
 
 
 
