@@ -4,48 +4,36 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-#  1) Load
-train_df = pd.read_csv("assignment_data_train.csv")
-test_df  = pd.read_csv("assignment_data_test.csv")
+# 1) Load data 
+train_df = pd.read_csv("assignment_data_train.csv", parse_dates=["Timestamp"])
+test_df  = pd.read_csv("assignment_data_test.csv",  parse_dates=["Timestamp"])
 
-# 2) Prepare data 
-train_df["Timestamp"] = pd.to_datetime(train_df["Timestamp"], errors="coerce")
-test_df["Timestamp"]  = pd.to_datetime(test_df["Timestamp"], errors="coerce")
-
+# 2) Sort & set hourly index, fill any tiny gaps
 train_df = train_df.sort_values("Timestamp").set_index("Timestamp").asfreq("h")
 test_df  = test_df.sort_values("Timestamp").set_index("Timestamp").asfreq("h")
 
-train_y = pd.to_numeric(train_df["trips"], errors="coerce")
-train_y = train_y.interpolate(method="time").ffill().bfill()
+y_train = pd.to_numeric(train_df["trips"], errors="coerce")
+y_train = y_train.interpolate(method="time", limit_direction="both").astype(float)
 
-# 3) Train model 
+# 3) Build a Holt-Winters model with weekly seasonality
 model = ExponentialSmoothing(
-    train_y,
+    y_train,
     trend="add",
+    damped_trend=True,
     seasonal="add",
-    seasonal_periods=24,
+    seasonal_periods=168,          
     initialization_method="estimated"
 )
+
+# 4) Fit
 modelFit = model.fit(optimized=True, use_brute=True)
 
-# 4) Forecast
+# 5) Forecast 
 h = len(test_df)
 forecast = modelFit.forecast(steps=h)
 
-
-pred = np.maximum(np.asarray(forecast, dtype=float).ravel(), 0.0)
-
-#  Debug 
-print("Train shape:", train_df.shape, "Test shape:", test_df.shape)
-print("Prediction length:", len(pred))
-print("First 5 predictions:", pred[:5])
-
-
-
-
-
-
-
+pred = np.asarray(forecast, dtype=float).ravel()
+pred = np.maximum(pred, 0.0)  # no negative trips
 
 
 
